@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  db:
+    image: mysql
+    container_name: my-mysql
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=yfinance
+      - MYSQL_USER=arun
+      - MYSQL_PASSWORD=root
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "3306:3306"  # Expose MySQL port to host for access
+    networks:
+      - backend_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 30s
+      retries: 5
+      start_period: 10s
+      timeout: 10s
+
+  # ETL Service
+  etl:
+    image: etl_image # Replace with your ETL Docker image name
+    container_name: etl-container
+    environment:
+      - DB_HOST=my-mysql
+      - DB_USER=arun
+      - DB_PASSWORD=root
+      - DB_NAME=yfinance
+    depends_on:
+      - db  # Ensures MySQL is up before ETL starts
+    networks:
+      - backend_network
+
+  # Model Service
+  model:
+    image: model_image  # Replace with your model Docker image name
+    container_name: model-container
+    environment:
+      - DB_HOST=my-mysql
+      - DB_USER=arun
+      - DB_PASSWORD=root
+      - DB_NAME=yfinance
+    depends_on:
+      - db
+      - etl  # Ensures MySQL is up before model starts
+    networks:
+      - backend_network
+
+  # Airflow Service
+  airflow:
+    image: apache/airflow  # Adjust version if necessary
+    container_name: airflow-container
+    environment:
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=db+mysqlconnector://arun:arun@my-mysql/yfinance
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    ports:
+      - "8080:8080"  # Airflow UI
+    volumes:
+      - airflow-dags:/opt/airflow/dags  # Persistent DAGs storage
+      - airflow-logs:/opt/airflow/logs  # Persistent logs storage
+      - ./orchestrator.py:/opt/airflow/dags/orchestrator.py
+    depends_on:
+      - db
+    networks:
+      - backend_network
+
+networks:
+  backend_network:
+    driver: bridge
+
+volumes:
+  airflow-dags:
+  airflow-logs:
