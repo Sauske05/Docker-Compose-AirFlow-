@@ -18,47 +18,50 @@ services:
     networks:
       - backend_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      test: ["CMD", "mysqladmin", "ping", "-u", "root", "-proot"]
       interval: 30s
       retries: 5
       start_period: 10s
       timeout: 10s
 
   # ETL Service
-  etl:
-    image: etl_image # Replace with your ETL Docker image name
-    container_name: etl-container
-    environment:
-      - DB_HOST=my-mysql
-      - DB_USER=arun
-      - DB_PASSWORD=root
-      - DB_NAME=yfinance
-    depends_on:
-      - db  # Ensures MySQL is up before ETL starts
-    networks:
-      - backend_network
+  # etl:
+  #   image: etl_image # Replace with your ETL Docker image name
+  #   container_name: etl-container
+  #   environment:
+  #     - DB_HOST=my-mysql
+  #     - DB_USER=arun
+  #     - DB_PASSWORD=root
+  #     - DB_NAME=yfinance
+  #   depends_on:
+  #     - db  # Ensures MySQL is up before ETL starts
+  #   networks:
+  #     - backend_network
 
-  # Model Service
-  model:
-    image: model_image  # Replace with your model Docker image name
-    container_name: model-container
-    environment:
-      - DB_HOST=my-mysql
-      - DB_USER=arun
-      - DB_PASSWORD=root
-      - DB_NAME=yfinance
-    depends_on:
-      - db
-      - etl  # Ensures MySQL is up before model starts
-    networks:
-      - backend_network
+  # # Model Service
+  # model:
+  #   image: model_image  # Replace with your model Docker image name
+  #   container_name: model-container
+  #   environment:
+  #     - DB_HOST=my-mysql
+  #     - DB_USER=arun
+  #     - DB_PASSWORD=root
+  #     - DB_NAME=yfinance
+  #   depends_on:
+  #     - db
+  #     - etl  # Ensures MySQL is up before model starts
+  #   networks:
+  #     - backend_network
 
   # Airflow Service
   airflow:
     image: apache/airflow  # Adjust version if necessary
     container_name: airflow-container
     environment:
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=db+mysqlconnector://arun:arun@my-mysql/yfinance
+      #- AIRFLOW__CORE__SQL_ALCHEMY_CONN=mysql+mysqlconnector://arun:root@my-mysql/yfinance
+      - AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0  # Bind to all interfaces
+      - AIRFLOW__WEBSERVER__WEB_SERVER_PORT=8080
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=mysql://arun:root@my-mysql/yfinance
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
     ports:
       - "8080:8080"  # Airflow UI
@@ -66,8 +69,14 @@ services:
       - airflow-dags:/opt/airflow/dags  # Persistent DAGs storage
       - airflow-logs:/opt/airflow/logs  # Persistent logs storage
       - ./orchestrator.py:/opt/airflow/dags/orchestrator.py
+      - /var/run/docker.sock:/var/run/docker.sock
+    #entrypoint: ["python", "/opt/airflow/dags/orchestrator.py"]
+    # group_add:
+    #   - docker:x:989:arun
+    entrypoint: ["sh", "-c", "airflow db init && airflow scheduler"]
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - backend_network
 

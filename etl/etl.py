@@ -1,7 +1,7 @@
 import pandas as pd
 import yfinance as yf
 import mysql.connector
-
+import os
 #database connection
 DB_HOST = 'my-mysql'
 DB_USER = 'arun'
